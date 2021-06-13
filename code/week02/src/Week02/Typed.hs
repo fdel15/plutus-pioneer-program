@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
-{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE TypeApplications    #-}
@@ -10,31 +9,34 @@
 
 module Week02.Typed where
 
-import           Control.Monad        hiding (fmap)
-import           Data.Map             as Map
-import           Data.Text            (Text)
-import           Data.Void            (Void)
-import           Plutus.Contract      hiding (when)
-import           PlutusTx             (Data (..))
+import           Control.Monad          hiding (fmap)
+import           Data.Map               as Map
+import           Data.Text              (Text)
+import           Data.Void              (Void)
+import           Plutus.Contract        hiding (when)
+import           PlutusTx               (Data (..))
 import qualified PlutusTx
-import           PlutusTx.Prelude     hiding (Semigroup(..), unless)
-import           Ledger               hiding (singleton)
-import           Ledger.Constraints   as Constraints
-import qualified Ledger.Scripts       as Scripts
-import qualified Ledger.Typed.Scripts as Scripts
-import           Ledger.Ada           as Ada
-import           Playground.Contract  (printJson, printSchemas, ensureKnownCurrencies, stage)
-import           Playground.TH        (mkKnownCurrencies, mkSchemaDefinitions)
-import           Playground.Types     (KnownCurrency (..))
-import           Prelude              (Semigroup (..))
-import           Text.Printf          (printf)
+import           PlutusTx.Prelude       hiding (Semigroup(..), unless)
+import           Ledger                 hiding (singleton)
+import           Ledger.Constraints     as Constraints
+import qualified Ledger.Typed.Scripts  as Scripts
+import qualified Ledger.Scripts         as Scripts
+import           Ledger.Ada             as Ada
+import           Playground.Contract (printJson, printSchemas, ensureKnownCurrencies, stage)
+import           Playground.TH       (mkKnownCurrencies, mkSchemaDefinitions)
+import           Playground.Types    (KnownCurrency (..))
+import           Prelude             (Semigroup (..))
+import           Text.Printf         (printf)
 
 {-# INLINABLE mkValidator #-}
 mkValidator :: () -> Integer -> ValidatorCtx -> Bool
 mkValidator () r _
-    | r == 42   = True
+    | r == 42 = True
     | otherwise = False
 
+-- Typed level programming. Advanced Haskell, but because it is boiler plate
+-- you can copy this pattern for each script without needing to understand
+-- it
 data Typed
 instance Scripts.ScriptType Typed where
     type instance DatumType Typed = ()
@@ -78,7 +80,7 @@ grab r = do
         tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ I r | oref <- orefs]
     ledgerTx <- submitTxConstraintsWith @Void lookups tx
     void $ awaitTxConfirmed $ txId ledgerTx
-    logInfo @String $ "collected gifts"
+    logInfo @String $ printf "collected a gift of %d lovelace" r
 
 endpoints :: Contract () GiftSchema Text ()
 endpoints = (give' `select` grab') >> endpoints

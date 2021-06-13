@@ -1,7 +1,6 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE NoImplicitPrelude   #-}
-{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE TypeApplications    #-}
@@ -30,7 +29,9 @@ import           Text.Printf         (printf)
 
 {-# INLINABLE mkValidator #-}
 mkValidator :: Data -> Data -> Data -> ()
-mkValidator _ _ _ = traceError "NO WAY!"
+mkValidator _ r _
+    | r == I 42 = ()
+    | otherwise = traceError "wrong redeemer"
 
 validator :: Validator
 validator = mkValidatorScript $$(PlutusTx.compile [|| mkValidator ||])
@@ -44,7 +45,7 @@ scrAddress = ScriptAddress valHash
 type GiftSchema =
     BlockchainActions
         .\/ Endpoint "give" Integer
-        .\/ Endpoint "grab" ()
+        .\/ Endpoint "grab" Integer
 
 give :: (HasBlockchainActions s, AsContractError e) => Integer -> Contract w s e ()
 give amount = do
@@ -53,23 +54,23 @@ give amount = do
     void $ awaitTxConfirmed $ txId ledgerTx
     logInfo @String $ printf "made a gift of %d lovelace" amount
 
-grab :: forall w s e. (HasBlockchainActions s, AsContractError e) => Contract w s e ()
-grab = do
+grab :: forall w s e. (HasBlockchainActions s, AsContractError e) => Integer -> Contract w s e ()
+grab r = do
     utxos <- utxoAt scrAddress
     let orefs   = fst <$> Map.toList utxos
         lookups = Constraints.unspentOutputs utxos      <>
                   Constraints.otherScript validator
         tx :: TxConstraints Void Void
-        tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ I 17 | oref <- orefs]
+        tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ I r | oref <- orefs]
     ledgerTx <- submitTxConstraintsWith @Void lookups tx
     void $ awaitTxConfirmed $ txId ledgerTx
-    logInfo @String $ "collected gifts"
+    logInfo @String $ printf "collected a gift of %d lovelace" r
 
 endpoints :: Contract () GiftSchema Text ()
 endpoints = (give' `select` grab') >> endpoints
   where
     give' = endpoint @"give" >>= give
-    grab' = endpoint @"grab" >>  grab
+    grab' = endpoint @"grab" >>= grab
 
 mkSchemaDefinitions ''GiftSchema
 

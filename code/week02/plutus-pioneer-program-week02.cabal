@@ -20,7 +20,7 @@ library
                      , Week02.Solution2
                      , Week02.Typed
   build-depends:       aeson
-                     , base ^>=4.14.1.0
+                     , base ^>=4.14.0.0
                      , containers
                      , playground-common
                      , plutus-contract
