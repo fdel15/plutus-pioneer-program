@@ -654,7 +654,7 @@ One way to do that would be to define something like:
 .. code:: haskell
 
       bindMaybe :: Maybe a -> (a -> Maybe b) -> Maybe b
-      bindMaybe Nothing = Nothing
+      bindMaybe Nothing _ = Nothing
       bindMaybe (Just x) f = f x
 
 Let's write the same function again using *bindMaybe*.
