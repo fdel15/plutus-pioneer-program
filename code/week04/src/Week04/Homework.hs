@@ -16,6 +16,7 @@ import Ledger.Ada            as Ada
 import Ledger.Constraints    as Constraints
 import Plutus.Contract       as Contract
 import Plutus.Trace.Emulator as Emulator
+import Wallet.Emulator.Wallet
 
 data PayParams = PayParams
     { ppRecipient :: PubKeyHash
@@ -35,7 +36,26 @@ payContract = do
 -- recipient, but with amounts given by the two arguments. There should be a delay of one slot
 -- after each endpoint call.
 payTrace :: Integer -> Integer -> EmulatorTrace ()
-payTrace _ _ = undefined -- IMPLEMENT ME!
+payTrace a b = do
+    -- activate wallet 1
+    h1 <- activateContractWallet (Wallet 1) payContract
+ 
+    -- call endpoint with param a
+    callEndpoint @"pay" h1 $ PayParams
+        { ppRecipient = pubKeyHash $ walletPubKey $ Wallet 2
+        , ppLovelace = a
+        }
+    -- wait 1 slot
+    void $ Emulator.waitNSlots 1
+  
+    -- call endpoint with param b
+    callEndpoint @"pay" h1 $ PayParams
+        { ppRecipient = pubKeyHash $ walletPubKey $ Wallet 2
+        , ppLovelace = b
+        }
+
+    -- wait 1 slot
+    void $ Emulator.waitNSlots 1
 
 payTest1 :: IO ()
 payTest1 = runEmulatorTraceIO $ payTrace 1000000 2000000
