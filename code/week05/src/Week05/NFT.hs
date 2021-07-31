@@ -12,10 +12,12 @@
 
 module Week05.NFT where
 
+import           Data.Aeson            (FromJSON, ToJSON)
 import           Control.Monad          hiding (fmap)
 import qualified Data.Map               as Map
 import           Data.Text              (Text)
 import           Data.Void              (Void)
+import           GHC.Generics          (Generic)
 import           Plutus.Contract        as Contract
 import           Plutus.Trace.Emulator  as Emulator
 import qualified PlutusTx
@@ -58,19 +60,37 @@ policy oref tn = mkMintingPolicyScript $
 curSymbol :: TxOutRef -> TokenName -> CurrencySymbol
 curSymbol oref tn = scriptCurrencySymbol $ policy oref tn
 
-type NFTSchema = Endpoint "mint" TokenName
+data NFTParams = NFTParams
+    { frankToken :: TokenName
+    , numberOfTokens  :: Integer
+    } deriving (Show, Generic, FromJSON, ToJSON, ToSchema)
 
-mint :: TokenName -> Contract w NFTSchema Text ()
-mint tn = do
+type NFTSchema = Endpoint "mint" NFTParams
+
+mint :: NFTParams -> Contract w NFTSchema Text ()
+-- function take a token name argument (i changed to NFTParams)
+mint np = do
+    let tn = frankToken np
+        num = numberOfTokens np
+    -- bind the contracts public key to a variable
     pk    <- Contract.ownPubKey
+    -- bind all UTXOs associated with the public key address to a variable
     utxos <- utxoAt (pubKeyAddress pk)
+    -- map over all unspent transactions
     case Map.keys utxos of
+        -- if unspent transactions is an empty list return an error
         []       -> Contract.logError @String "no utxo found"
+        -- if unspent transactions exist, grab the first one (oref)
         oref : _ -> do
-            let val     = Value.singleton (curSymbol oref tn) tn 1
+            -- Make a 'Value' containing only the given quantity of the given currency and bind it to val 
+            let val     = Value.singleton (curSymbol oref tn) tn num
+            --  lookups value with minting policy script <> scripts lookup that uses unspent outputs to resolve input constraints
                 lookups = Constraints.mintingPolicy (policy oref tn) <> Constraints.unspentOutputs utxos
+                -- constraint that we must mint 1 token <> monoid txconstraint mustSpendPubKeyOutput
                 tx      = Constraints.mustMintValue val <> Constraints.mustSpendPubKeyOutput oref
+            -- submit transaction
             ledgerTx <- submitTxConstraintsWith @Void lookups tx
+            -- wait for response from submission
             void $ awaitTxConfirmed $ txId ledgerTx
             Contract.logInfo @String $ printf "forged %s" (show val)
 
@@ -85,9 +105,15 @@ mkKnownCurrencies []
 
 test :: IO ()
 test = runEmulatorTraceIO $ do
-    let tn = "ABC"
     h1 <- activateContractWallet (Wallet 1) endpoints
     h2 <- activateContractWallet (Wallet 2) endpoints
-    callEndpoint @"mint" h1 tn
-    callEndpoint @"mint" h2 tn
+
+    callEndpoint @"mint" h1 $ NFTParams
+        { frankToken = "Frank"
+        , numberOfTokens = 1  
+        }
+    callEndpoint @"mint" h2 $ NFTParams
+        { frankToken = "Bob"
+        , numberOfTokens = 1  
+        }
     void $ Emulator.waitNSlots 1
