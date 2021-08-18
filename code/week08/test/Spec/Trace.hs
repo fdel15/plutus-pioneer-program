@@ -38,9 +38,10 @@ tests :: TestTree
 tests = checkPredicateOptions
     (defaultCheckOptions & emulatorConfig .~ emCfg)
     "token sale trace"
-    (     walletFundsChange (Wallet 1) (Ada.lovelaceValueOf   10_000_000  <> assetClassValue token (-60))
+    (     walletFundsChange (Wallet 1) (Ada.lovelaceValueOf   35_000_000  <> assetClassValue token (-35))
      .&&. walletFundsChange (Wallet 2) (Ada.lovelaceValueOf (-20_000_000) <> assetClassValue token   20)
      .&&. walletFundsChange (Wallet 3) (Ada.lovelaceValueOf (- 5_000_000) <> assetClassValue token    5)
+     .&&. walletFundsChange (Wallet 4) (Ada.lovelaceValueOf (- 10_000_000) <> assetClassValue token    10)
     )
     myTrace
 
@@ -48,7 +49,7 @@ runMyTrace :: IO ()
 runMyTrace = runEmulatorTraceIO' def emCfg myTrace
 
 emCfg :: EmulatorConfig
-emCfg = EmulatorConfig (Left $ Map.fromList [(Wallet w, v) | w <- [1 .. 3]]) def def
+emCfg = EmulatorConfig (Left $ Map.fromList [(Wallet w, v) | w <- [1 .. 4]]) def def
   where
     v :: Value
     v = Ada.lovelaceValueOf 1_000_000_000 <> assetClassValue token 1000
@@ -72,10 +73,13 @@ myTrace = do
         Nothing -> Extras.logError @String "error starting token sale"
         Just ts -> do
             Extras.logInfo $ "started token sale " ++ show ts
+            Extras.logInfo $ "ts address: " ++ show (tsAddress ts)
 
             h1 <- activateContractWallet (Wallet 1) $ useEndpoints ts
             h2 <- activateContractWallet (Wallet 2) $ useEndpoints ts
             h3 <- activateContractWallet (Wallet 3) $ useEndpoints ts
+            h4 <- activateContractWallet (Wallet 4) $ useEndpoints ts
+            h5 <- activateContractWallet (Wallet 1) $ useEndpoints ts
 
             callEndpoint @"set price" h1 1_000_000
             void $ Emulator.waitNSlots 5
@@ -89,5 +93,17 @@ myTrace = do
             callEndpoint @"buy tokens" h3 5
             void $ Emulator.waitNSlots 5
 
-            callEndpoint @"withdraw" h1 (40, 10_000_000)
+            callEndpoint @"withdraw" h1 (20, 5_000_000)
+            void $ Emulator.waitNSlots 5
+
+            callEndpoint @"buy tokens" h4 10
+            void $ Emulator.waitNSlots 5
+
+            callEndpoint @"end token sale" h5 ()
+            void $ Emulator.waitNSlots 5
+
+            callEndpoint @"add tokens" h1 100
+            void $ Emulator.waitNSlots 5
+
+            callEndpoint @"buy tokens" h4 10
             void $ Emulator.waitNSlots 5
